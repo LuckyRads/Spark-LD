@@ -8,6 +8,7 @@ from pyspark.sql.types import *
 spark = SparkSession.builder.appName('Laboras3').getOrCreate()
 
 text_file = spark.sparkContext.textFile("duom_cut.txt")
+# text_file = spark.sparkContext.textFile("duom_full.txt")
 
 
 def parsinam(line):
@@ -108,9 +109,12 @@ for u in unique.collect():
         maxIter=10, regParam=0.3, elasticNetParam=0.8, featuresCol='features', labelCol='BendrasLaikas')
     linear_regression_model = linear_regression.fit(assembled_vector)
 
+    intercept = linear_regression_model.intercept
+    coefficients = linear_regression_model.coefficients[0]
+
     # Print the coefficients and intercept for linear regression
-    print("Coefficients: %s" % str(linear_regression_model.coefficients))
-    print("Intercept: %s" % str(linear_regression_model.intercept))
+    print("Coefficients: %s" % str(coefficients))
+    print("Intercept: %s" % str(intercept))
 
     # Summarize the model over the training set and print out some metrics
     trainingSummary = linear_regression_model.summary
@@ -131,9 +135,16 @@ for u in unique.collect():
     print(labels)
     print(values)
 
+    X = pandasDF['BendrasLaikas'].to_list()
+    Y = pandasDF['features'].to_list()
+
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(20, 5))
-    axes.scatter(labels, values, s=10)
+    axes.scatter(X, Y, s=10)
     axes.set_xlabel('BendrasLaikas')
     axes.set_ylabel('Svoris')
+    # x_line = [min(X), max(Y)]
+    # y_line = [intercept + coefficients * x_line[0],
+    #           intercept + coefficients * x_line[1]]
+    # axes.plot(x_line, y_line, color='red')
 
     plt.show()
