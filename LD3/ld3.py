@@ -1,11 +1,8 @@
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator
-from mpl_toolkits.mplot3d import Axes3D
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import LinearRegression
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, log, to_timestamp, udf
+from pyspark.sql.functions import col, udf
 from pyspark.sql.types import *
 
 spark = SparkSession.builder.appName('Laboras3').getOrCreate()
@@ -71,9 +68,11 @@ def makeID(str1, str2):
 
 makeID_UDF = udf(lambda z1, z2: makeID(z1, z2), StringType())
 
+
 def convert_time(string):
     hours, minutes = string.split(':')
     return int(hours) * 60 + int(minutes)
+
 
 convert_time_udf = udf(lambda z: convert_time(z), IntegerType())
 
@@ -96,14 +95,14 @@ for u in unique.collect():
     # Convter RDD to DataFrame
     data_frame = filtered_data.toDF(['ID', 'Svoris'])
     joined_data_frame = data_frame.join(routes2, 'ID')
-    joined_data_frame = joined_data_frame.withColumn('BendrasLaikas', joined_data_frame.BendrasLaikas.cast(IntegerType()))
+    joined_data_frame = joined_data_frame.withColumn(
+        'BendrasLaikas', joined_data_frame.BendrasLaikas.cast(IntegerType()))
 
     # Create feature vector
     vector_assembler = VectorAssembler(
         inputCols=['Svoris'], outputCol='features')
     assembled_vector = vector_assembler.transform(joined_data_frame)\
         .drop('Svoris').drop('ID')
-    
 
     linear_regression = LinearRegression(
         maxIter=10, regParam=0.3, elasticNetParam=0.8, featuresCol='features', labelCol='BendrasLaikas')
