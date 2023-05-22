@@ -62,7 +62,7 @@ unique.collect()
 routes = spark.read.option("header", True).csv("RouteSummary.txt")
 routes.printSchema()
 # Drop unused columns
-routes = routes.drop("M", "BendrasAtstumas", "BendrasLaikas", "BendraKaina")
+routes = routes.drop("M", "BendrasAtstumas", "BendrasSvoris", "BendraKaina")
 
 
 def makeID(str1, str2):
@@ -71,11 +71,19 @@ def makeID(str1, str2):
 
 makeID_UDF = udf(lambda z1, z2: makeID(z1, z2), StringType())
 
+def convert_time(string):
+    hours, minutes = string.split(':')
+    return int(hours) * 60 + int(minutes)
+
+convert_time_udf = udf(lambda z: convert_time(z), IntegerType())
+
+# Make ID and drop those columns
 routes2 = routes.withColumn('ID', makeID_UDF(
     "marsrutas", "sustojimo data"))\
-    .drop("marsrutas", "sustojimo data")\
-    .filter(col('BendrasSvoris').isNotNull())\
-    .withColumn('BendrasSvoris', col('BendrasSvoris').cast(FloatType()))
+    .drop("marsrutas", "sustojimo data")
+
+routes2 = routes2.filter(col('BendrasLaikas').isNotNull())\
+    .withColumn('BendrasLaikas', convert_time_udf('BendrasLaikas'))
 routes2.printSchema()
 
 for u in unique.collect():
@@ -88,6 +96,7 @@ for u in unique.collect():
     # Convter RDD to DataFrame
     data_frame = filtered_data.toDF(['ID', 'Svoris'])
     joined_data_frame = data_frame.join(routes2, 'ID')
+    joined_data_frame = joined_data_frame.withColumn('BendrasLaikas', joined_data_frame.BendrasLaikas.cast(IntegerType()))
 
     # Create feature vector
     vector_assembler = VectorAssembler(
@@ -95,7 +104,9 @@ for u in unique.collect():
     assembled_vector = vector_assembler.transform(joined_data_frame)\
         .drop('Svoris').drop('ID')
     
-    linear_regression = LinearRegression(maxIter=10, regParam=0.3, elasticNetParam=0.8, featuresCol='features', labelCol='BendrasSvoris')
+
+    linear_regression = LinearRegression(
+        maxIter=10, regParam=0.3, elasticNetParam=0.8, featuresCol='features', labelCol='BendrasLaikas')
     linear_regression_model = linear_regression.fit(assembled_vector)
 
     # Print the coefficients and intercept for linear regression
@@ -115,70 +126,15 @@ for u in unique.collect():
     pandasDF = assembled_vector.toPandas()
     pandasDF.head()
 
-    labels = pandasDF['BendrasSvoris'].to_list()
+    labels = pandasDF['BendrasLaikas'].to_list()
     values = pandasDF['features'].to_list()
 
     print(labels)
     print(values)
 
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(20, 5))
+    axes.scatter(labels, values, s=10)
+    axes.set_xlabel('BendrasLaikas')
+    axes.set_ylabel('Svoris')
 
-    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
-    axes[2].scatter(labels, labels, s=10)
-    
     plt.show()
-
-
-
-
-# # ----------------------------
-
-# # training data formato: ("prognozuojama reiskme", "parametras")
-# training = mmap.toDF(['ID', 'BendrasLaikas'])
-
-# # regression ...
-
-
-# # Load training data
-# # training = spark.read.format("libsvm")\
-# #    .load("sample_linear_regression_data.txt")
-
-# lr = LinearRegression(maxIter=10, regParam=0.3, elasticNetParam=0.8)
-
-# # Fit the model
-# lrModel = lr.fit(training)
-
-# # Print the coefficients and intercept for linear regression
-# print("Coefficients: %s" % str(lrModel.coefficients))
-# print("Intercept: %s" % str(lrModel.intercept))
-
-# # Summarize the model over the training set and print out some metrics
-# trainingSummary = lrModel.summary
-# print("numIterations: %d" % trainingSummary.totalIterations)
-# print("objectiveHistory: %s" % str(trainingSummary.objectiveHistory))
-# trainingSummary.residuals.show()
-# print("RMSE: %f" % trainingSummary.rootMeanSquaredError)
-# print("r2: %f" % trainingSummary.r2)
-
-
-# # dfFromRDD1.show()
-# # training = training.withColumnRenamed('marsrutas', 'parametrai')
-
-
-# training.printSchema()
-
-# pandasDF = training.toPandas()
-# pandasDF.head()
-
-# labels = pandasDF['_1'].to_list()
-
-# values = pandasDF['_2'].to_list()
-# print(labels)
-# print(values)
-
-
-# fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
-# axes[2].scatter(labels, labels, s=10)
-
-# # training.plot.scatter(x='label',
-# #                      y='label',
-# #                      c='ats',colormap='viridis',ax=axes[0])
